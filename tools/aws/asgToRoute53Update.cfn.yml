@@ -1,0 +1,98 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: AutoScaling Group to Route 53 record update
+#ensure you have the Tag DomainMeta set which a value of <HostedZoneId>:<Domain> on the ASG i.e. DomainMeta: Z10MWC8V7JDDU1:www.mydomain.com
+Parameters:
+  Service:
+    Type: String
+    Default: 'asgToRoute53'
+    Description: Service name for this product
+  HostedZone:
+    Type: AWS::Route53::HostedZone::Id
+    Description: This is the hosted zone which this lambda function can tweak i.e. arn:aws:route53:::hostedzone/${HostedZone}
+
+Resources:
+
+  ASGtoRoute53UpdateSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: ASGtoRoute53Update
+
+  LambdaASGtoRoute53Update:
+    Type: 'AWS::Serverless::Function'
+    DependsOn:
+      - LambdaASGtoRoute53UpdateRole
+    Properties:
+      #FunctionName: LambdaASGtoRoute53Update
+      Code:
+        ZipFile:
+           !Sub |
+            var AWS=require("aws-sdk"),nextTick=function(e){"function"==typeof setImmediate?setImmediate(e):"undefined"!=typeof process&&process.nextTick?process.nextTick(e):setTimeout(e,0)},makeIterator=function(e){var n=function(o){var t=function(){return e.length&&e[o].apply(null,arguments),t.next()};return t.next=function(){return o<e.length-1?n(o+1):null},t};return n(0)},_isArray=Array.isArray||function(e){return"[object Array]"===Object.prototype.toString.call(e)},waterfall=function(e,n){if(n=n||function(){},!_isArray(e)){var o=new Error("First argument to waterfall must be an array of functions");return n(o)}if(!e.length)return n();var t=function(e){return function(o){if(o)n.apply(null,arguments),n=function(){};else{var r=Array.prototype.slice.call(arguments,1),s=e.next();s?r.push(t(s)):r.push(n),nextTick(function(){e.apply(null,r)})}}};t(makeIterator(e))()};
+            exports.handler=function(e,n){console.log(e);var o=JSON.parse(e.Records[0].Sns.Message),t=o.AutoScalingGroupName,r=(o.EC2InstanceId,o.Event);
+            if(console.log(r),"autoscaling:EC2_INSTANCE_LAUNCH"===r||"autoscaling:EC2_INSTANCE_TERMINATE"===r){console.log("Handling Launch/Terminate Event for "+t);
+            var s=new AWS.AutoScaling({region:"${AWS::Region}"}),a=new AWS.EC2({region:"${AWS::Region}"}),c=new AWS.Route53;
+            waterfall([function(e){console.log("Describing ASG Tags"),s.describeTags({Filters:[{Name:"auto-scaling-group",Values:[t]},{Name:"key",Values:["DomainMeta"]}],MaxRecords:1},e)},
+            function(e,n){console.log("Processing ASG Tags"),console.log(e.Tags),0==e.Tags.length&&n("ASG: "+t+" does not define Route53 DomainMeta tag.");var o=e.Tags[0].Value.split(":"),r={HostedZoneId:o[0],RecordName:o[1]};console.log(r),n(null,r)},
+            function(e,n){console.log("Retrieving Instances in ASG"),s.describeAutoScalingGroups({AutoScalingGroupNames:[t],MaxRecords:1},
+            function(o,t){n(o,e,t)})},function(e,n,o){console.log(n.AutoScalingGroups[0]);var t=n.AutoScalingGroups[0].Instances.map(function(e){return e.InstanceId});a.describeInstances({DryRun:!1,InstanceIds:t},
+            function(n,t){o(n,e,t)})},function(e,n,o){console.log(n.Reservations);var t=n.Reservations.map(function(e){return{Value:e.Instances[0].NetworkInterfaces[0].Association.PublicIp}});console.log(t),c.changeResourceRecordSets({ChangeBatch:{Changes:[{Action:"UPSERT",ResourceRecordSet:{Name:e.RecordName,Type:"A",TTL:10,ResourceRecords:t}}]},HostedZoneId:e.HostedZoneId},o)}],
+            function(e){e?console.error("Failed to process DNS updates for ASG event: ",e):console.log("Successfully processed DNS updates for ASG event."),n.done(e)})}
+            else console.log("Unsupported ASG event: "+t,r),n.done("Unsupported ASG event: "+t,r)};
+      Description: !Sub 'Asg to Route53 record domain update'
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaASGtoRoute53UpdateRole.Arn
+      Runtime: nodejs8.10
+      Timeout: 20
+      Events:
+        SNS1:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: ASGtoRoute53UpdateSNSTopic
+
+  LambdaASGtoRoute53UpdateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+      Policies:
+        - PolicyName: asg-CustomPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - route53:ListHostedZones
+              - route53:GetChange
+              Resource:
+              - "*"
+            - Effect: Allow
+              Action:
+              - route53:ChangeResourceRecordSets
+              Resource:
+               - !Sub "arn:aws:route53:::hostedzone/${HostedZone}"
+
+Outputs:
+  ASGtoRoute53UpdateSNSTopic:
+    Description: ARN of newly created SNS Topic
+    Value:
+      Ref: ASGtoRoute53UpdateSNSTopic
+    Export:
+      Name: !Sub "${Service}-sns"
+  QueueName:
+    Description: Name of newly created SNS Topic
+    Value:
+      Fn::GetAtt:
+      - ASGtoRoute53UpdateSNSTopic
+      - TopicName

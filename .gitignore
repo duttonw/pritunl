@@ -11,6 +11,7 @@ Thumbs.db
 *.egg-info
 *.tfstate
 *.tfstate.backup
+*.idea
 .sass-cache
 /.vagrant
 /build

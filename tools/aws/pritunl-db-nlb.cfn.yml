@@ -9,9 +9,9 @@ Parameters:
   PritunlDomain:
     Type: String
     Description: This is the domain that pritunl can control for letsencrypt dns and also to add new servers to
-#  SSMKey:
-#    Type: String
-#    Description: KMS key for alias/aws/ssm
+  SSMKey:
+    Type: String
+    Description: KMS key for alias/aws/ssm
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access
@@ -77,23 +77,19 @@ Parameters:
     - r3.4xlarge
     - r3.8xlarge
     ConstraintDescription: Must be a valid EC2 instance type
-  DatabaseAuthEnabled:
-    Type: String
-    Default: "false"
-    Description: mongodb is setup without auth, once manually set, then update ssm location and update the template on this value
   DatabaseUsername:
     Type : 'AWS::SSM::Parameter::Value<String>'
     Description: if set tell pritunl the database username set ssm location /config/Pritnul/databaseUsername
-    Default: "/config/pritunl/databaseUsername"
+    Default: ‘/config/pritunl/databaseUsername’
   DatabasePassword:
     Type : 'AWS::SSM::Parameter::Value<String>'
     Description: if set tell pritunl the database password set ssm location /config/Pritnul/databasePassword
-    Default: "/config/Pritnul/databasePassword"
+    Default: ‘/config/Pritnul/databasePassword’
     NoEcho: true
   DatabaseUseSSL:
     Type : 'AWS::SSM::Parameter::Value<String>'
     Description: if set tell pritunl the database requires ssl set ssm location /config/Pritnul/databaseUseSSL
-    Default: "/config/Pritnul/databaseUseSSL"
+    Default: ‘/config/Pritnul/databaseUseSSL’
   DatabaseAuthSource:
     Type : String
     Default: admin
@@ -110,44 +106,26 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
     Description: The list of SubnetIds in your VPC to launch Pritunl instances
     ConstraintDescription: Must be a list of existing subnets in VPC
+  PublicVpcSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The list of Public SubnetIds in your VPC to launch the network load balancer
+    ConstraintDescription: Must be a list of existing subnets in VPC
+  NLBEnabled:
+    Type: String
+    Description: true or false for creating nlb
+    Default: 'true'
   PublicIpEnabled:
     Type: String
-    Description: true or false for enabling public ip for instances (ensure nat gateway is attached if false)
-    Default: 'true'
+    Description: true or false for enabling public ip for instances
+    Default: 'false'
   DatabasePublicIpEnabled:
     Type: String
-    Description: true or false for enabling public ip for database (ensure nat gateway is attached if false)
+    Description: true or false for enabling public ip for database
     Default: 'false'
   AdminPort:
     Type: Number
     Description: what port is the admin system running on
-    Default: 443
-  AdminCidrRange:
-    Type: String
-    Description: cidr range to lock down admin mangement
-    Default: "0.0.0.0/0"
-  VPNUdpMinRange:
-    Type: String
-    Default: '10000'
-  VPNUdpMaxRange:
-    Type: String
-    Default: '19999'
-  VPNUdpCidrRange:
-    Type: String
-    Default: "0.0.0.0/0"
-  VPNTcpMinRange:
-     Type: String
-     Default: '8443'
-  VPNTcpMaxRange:
-     Type: String
-     Default: '8443'
-  VPNTcpCidrRange:
-    Type: String
-    Default: "0.0.0.0/0"  #change to internal ip range to disable tcp
-  AsgNotification:
-    Type: String
-    Description: Used to notify lambda to update domain of asg ec2 instance list
-
+    Default: 8443
 Mappings:
   AWSInstanceType2Arch:
     t2.micro:
@@ -195,57 +173,60 @@ Mappings:
     r3.8xlarge:
       Arch: HVM64
   AWSRegionArch2AMI:
-    AMI:
-      HVM64: "amzn-ami-hvm-2018.03.0.20181129-x86_64-gp2"
     us-east-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-0080e4c5bc078760e
+      HVM64: ami-02cc5b6cf82d354da
       HVMG2: NOT_SUPPORTED
     us-west-2:
       PV64: NOT_SUPPORTED
-      HVM64: ami-01e24be29428c15b2
+      HVM64: ami-0b5913cdbba67598e
       HVMG2: NOT_SUPPORTED
     us-west-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-0ec6517f6edbf8044
+      HVM64: ami-0c3ca2c6f4edb5546
       HVMG2: NOT_SUPPORTED
     eu-west-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-08935252a36e25f85
+      HVM64: ami-06e710681e5ee07aa
       HVMG2: NOT_SUPPORTED
     eu-central-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-0cfbf4f6db41068ac
+      HVM64: ami-0f0debf49705e047c
       HVMG2: NOT_SUPPORTED
     ap-southeast-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-05b3bcf7f311194b3
+      HVM64: ami-00cbdef8d2acf44a7
       HVMG2: NOT_SUPPORTED
     ap-northeast-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-00a5245b4816c38e6
+      HVM64: ami-016ad6443b4a3d960
       HVMG2: NOT_SUPPORTED
     ap-southeast-2:
       PV64: NOT_SUPPORTED
-      HVM64: ami-02fd0b06f06d93dfc
+      HVM64: ami-0fbfb4926256a1f1e
       HVMG2: NOT_SUPPORTED
     sa-east-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-05145e0b28ad8e0b2
+      HVM64: ami-088018633b4291710
       HVMG2: NOT_SUPPORTED
     cn-north-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-f239abcb
+      HVM64: ami-0273771427032a4e6
       HVMG2: NOT_SUPPORTED
     us-gov-west-1:
       PV64: NOT_SUPPORTED
-      HVM64: ami-41b2d362
+      HVM64: ami-e5dbbf84
       HVMG2: NOT_SUPPORTED
 Conditions:
-  hasNOAsgNotification:
-    !Equals [ !Ref AsgNotification, '' ]
-  hasAsgNotification:
-    !Not [ !Equals [ !Ref AsgNotification, '' ]]
+  IsNLBEnabled:
+    Fn::Equals:
+      - Ref: NLBEnabled
+      - 'true'
+  IsNLBNotEnabled
+    Fn::Not:
+      Fn::Equals:
+        - Ref: NLBEnabled
+        - 'true'
 Resources:
   PritunlInstanceRole:
     Type: AWS::IAM::Role
@@ -259,7 +240,6 @@ Resources:
           Action: sts:AssumeRole
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
-      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
       Policies:
       - PolicyName: Pritunl-CustomPolicy
         PolicyDocument:
@@ -305,11 +285,11 @@ Resources:
             - !Sub "arn:aws:ssm:*:*:parameter/config/${Service}/*"
             - !Sub "arn:aws:ssm:*:*:parameter/config/${Service}_*"
             - !Sub "arn:aws:ssm:*:*:parameter/config/${Service}_*/*"
-#          - Effect: Allow
-#            Action:
-#            - kms:Decrypt
-#            Resource:
-#            - Ref: SSMKey
+          - Effect: Allow
+            Action:
+            - kms:Decrypt
+            Resource:
+            - Ref: SSMKey
           - Effect: Allow
             Action:
             - ssm:UpdateInstanceInformation
@@ -362,7 +342,7 @@ Resources:
               command: start amazon-ssm-agent
               ignoreErrors: true
         AWSLogs:
-          files: #before we install awslogs as we cfn-init files can't overide existing files
+          files:
             "/etc/awslogs/awslogs.conf":
               content: |
                 [general]
@@ -405,7 +385,7 @@ Resources:
               command: !Sub "sed -i 's/us-east-1/${AWS::Region}/g'  /etc/awslogs/awscli.conf"
             01_start_awslogs:
               command: service awslogs restart
-              ignoreErrors: true #if we run this script a second time it won't fail
+              ignoreErrors: true
             01_start_awslogs_onreboot:
               command: chkconfig awslogs on
         Setup:
@@ -481,7 +461,7 @@ Resources:
       ResourceSignal:
         Timeout: PT5M
   PritunlScalingGroup:
-    Condition: hasNOAsgNotification
+    Condition: IsNLBEnabled
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AvailabilityZones:
@@ -496,6 +476,10 @@ Resources:
         Ref: StackSize
       DesiredCapacity:
         Ref: StackSize
+      TargetGroupARNs:
+        - !Ref publicNLBTargetGroup80
+        - !Ref publicNLBTargetGroup443
+        - !Ref publicNLBTargetGroupAdmin
       Tags:
         -
           Key: Name
@@ -503,9 +487,8 @@ Resources:
             - "${StackName}-instance"
             - StackName: !Ref AWS::StackName
           PropagateAtLaunch: true
-
   PritunlScalingGroup:
-    Condition: hasAsgNotification
+    Condition: IsNLBNotEnabled
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AvailabilityZones:
@@ -526,16 +509,7 @@ Resources:
           Value: !Sub
             - "${StackName}-instance"
             - StackName: !Ref AWS::StackName
-          Key: DomainMeta
-          Value: !Sub "${HostedZone}:${PritunlDomain}"
           PropagateAtLaunch: true
-      NotificationConfigurations:
-        - TopicARN:
-            Ref: AsgNotification
-          NotificationTypes:
-          - autoscaling:EC2_INSTANCE_LAUNCH
-          - autoscaling:EC2_INSTANCE_TERMINATE
-
   PritunlLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -612,7 +586,7 @@ Resources:
               ignoreErrors: true
             03_start_awslogs_onreboot:
               command: chkconfig awslogs on
-        CfnHup: #allows cloudformation to update the instances post creation.
+        CnfHup: #allows cloudformation to update the instances post creation.
           files:
             "/etc/cfn/cfn-hup.conf":
               content:
@@ -686,11 +660,10 @@ Resources:
               group: root
         Configure:
           commands:
-            00_auth_pritunl: #if DatabaseAuthEnabled not false, then add auth
-              command: !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": mongodb://${DatabaseUsername}:${DatabasePassword}@${DatabaseInstance.PrivateIp}:27017/pritunl?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
+            00_auth_pritunl:
+              command: !Sub "check=${DatabaseUsername}; if [ "$check" = '' ]; then sed -i 's|"mongodb_uri":.*$|"mongodb_uri": mongodb://${DatabaseUsername}:${DatabasePassword}@${DatabaseInstance.PrivateIp}:27017/pritunl?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo "no change auth"; fi
             01_start_pritunl:
               command: start pritunl
-              ignoreErrors: true
             02_set_admin_port:
               command: !Sub "pritunl set app.server_port ${AdminPort}"
     Properties:
@@ -747,18 +720,135 @@ Resources:
         ToPort: '80'
         CidrIp: 0.0.0.0/0
       - IpProtocol: tcp
-        FromPort: !Ref VPNTcpMinRange
-        ToPort: !Ref VPNTcpMaxRange
-        CidrIp: !Ref VPNTcpCidrRange
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
       - IpProtocol: tcp
         FromPort: !Ref AdminPort
         ToPort: !Ref AdminPort
-        CidrIp: !Ref AdminCidrRange
+        CidrIp: 0.0.0.0/0
       - IpProtocol: udp
-        FromPort: !Ref VPNUdpMinRange
-        ToPort: !Ref VPNUdpMaxRange
-        CidrIp: !Ref VPNUdpCidrRange
+        FromPort: '10000'
+        ToPort: '19999'
+        CidrIp: 0.0.0.0/0
+  publicNLB:
+    Condition: IsNLBEnabled
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Type: network
+      Name: !Sub
+        - ${StackName}-nlb
+        -
+          StackName: !Ref AWS::StackName
+      Scheme: internet-facing
+      Subnets: !Ref PublicVpcSubnets
+      Tags:
+        -
+          Key: Name
+          Value: !Sub
+            - ${StackName}-nlb
+            - StackName: !Ref AWS::StackName
 
+  NLBListener80:
+    Condition: IsNLBEnabled
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        -
+          Type: forward
+          TargetGroupArn: !Ref publicNLBTargetGroup80
+      LoadBalancerArn: !Ref publicNLB
+      Port: 80
+      Protocol: TCP
+  NLBListener443:
+    Condition: IsNLBEnabled
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        -
+          Type: forward
+          TargetGroupArn: !Ref publicNLBTargetGroup443
+      LoadBalancerArn: !Ref publicNLB
+      Port: 443
+      Protocol: TCP
+  NLBListenerAdmin:
+    Condition: IsNLBEnabled
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        -
+          Type: forward
+          TargetGroupArn: !Ref publicNLBTargetGroupAdmin
+      LoadBalancerArn: !Ref publicNLB
+      Port: !Ref AdminPort
+      Protocol: TCP
+
+  publicNLBTargetGroup80:
+    Condition: IsNLBEnabled
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      #HealthCheckPath: /
+      HealthCheckProtocol: TCP
+      # HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      #Matcher:
+      #  HttpCode: 200-399
+      Name: !Sub
+        - ${StackName}-80-tg
+        - StackName: !Ref AWS::StackName
+      Port: 80
+      Protocol: TCP
+      Tags:
+        -
+          Key: Name
+          Value: alb-tg
+      VpcId: !Ref VpcId
+  publicNLBTargetGroup443:
+    Condition: IsNLBEnabled
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      #HealthCheckPath: /
+      HealthCheckProtocol: TCP
+      # HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      #Matcher:
+      #  HttpCode: 200-399
+      Name: !Sub
+        - ${StackName}-443-tg
+        - StackName: !Ref AWS::StackName
+      Port: 443
+      Protocol: TCP
+      Tags:
+        -
+          Key: Name
+          Value: alb-tg
+      VpcId: !Ref VpcId
+  publicNLBTargetGroupAdmin:
+    Condition: IsNLBEnabled
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      #HealthCheckPath: /
+      HealthCheckProtocol: TCP
+      # HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      #Matcher:
+      #  HttpCode: 200-399
+      Name: !Sub
+        - ${StackName}-admin-tg
+        - StackName: !Ref AWS::StackName
+      Port: 8443
+      Protocol: TCP
+      Tags:
+        -
+          Key: Name
+          Value: alb-tg
+      VpcId: !Ref VpcId
   HostedZone:
     Type: AWS::Route53::HostedZone
     Properties:
@@ -769,17 +859,18 @@ Resources:
         -
           Key: "Service"
           Value: !Ref Service
-#  ElbDNSRecordSet:
-#    Condition: IsNLBEnabled
-#    Type: AWS::Route53::RecordSet
-#    Properties:
-#      HostedZoneId: !Sub ${HostedZone}
-#      AliasTarget:
-#        DNSName: !GetAtt publicNLB.DNSName
-#        HostedZoneId: !GetAtt publicNLB.CanonicalHostedZoneID
-#      Name: !Sub "${PritunlDomain}."
-#      Type: A
+  ElbDNSRecordSet:
+    Condition: IsNLBEnabled
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Sub ${HostedZone}
+      AliasTarget:
+        DNSName: !GetAtt publicNLB.DNSName
+        HostedZoneId: !GetAtt publicNLB.CanonicalHostedZoneID
+      Name: !Sub "${PritunlDomain}."
+      Type: A
 
 Outputs:
   ZoneID:
     Value: !Ref HostedZone
+    Description: Route53 hosted zone ID please add the name servers connected to this to your TLD
