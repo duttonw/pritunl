@@ -5,7 +5,8 @@
 var AWS=require("aws-sdk");
 
 // MIT license (by Elan Shanker).
-
+//https://objectpartners.com/2015/07/07/aws-tricks-updating-route53-dns-for-autoscalinggroup-using-lambda/
+// with https://github.com/es128/async-waterfall/blob/master/index.js
 'use strict';
 
 var nextTick = function (fn) {

@@ -1,19 +1,35 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
 Description: Pritunl - Enterprise Distributed VPN Server
 Parameters:
   Service:
     Type: String
     Default: 'Pritnul'
     Description: Service name for this product
+  PritunlDomainHostedZoneId:
+     Type: AWS::Route53::HostedZone::Id
+     Description: This is the pre-exisitng domain to use, you also give access to edit this domain for the pritunlDomain if PritunlDomainAutoUpdate is true
   PritunlDomain:
     Type: String
     Description: This is the domain that pritunl can control for letsencrypt dns and also to add new servers to
+  PritunlDomainAutoUpdate:
+    Type: String
+    Default: "true"
+    AllowedValues :
+       - "true"
+       - "false"
+    Description: If true, it will auto create a lambda function to update the domain name
+  PritunlDomainAsgNotification:
+    Type: String
+    Description: "Used to notify external lambda to update domain of asg ec2 instance list. note: this set  or PritunlDomainAutoUpdate:false"
+#uncomment if you want ssm decription functionality
 #  SSMKey:
 #    Type: String
 #    Description: KMS key for alias/aws/ssm
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
+    Type: String #Type: AWS::EC2::KeyPair::KeyName since session manager means you don't need ssh keys anymore
+    Default: ''
     Description: Name of an existing EC2 KeyPair to enable SSH access
     ConstraintDescription: Must be the name of an existing EC2 KeyPair
   StackSize:
@@ -29,10 +45,28 @@ Parameters:
     - t2.micro
     - t2.small
     - t2.medium
+    - t2.large
+    - t3.micro
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
     - m3.medium
     - m3.large
     - m3.xlarge
     - m3.2xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
     - c3.large
     - c3.xlarge
     - c3.2xlarge
@@ -43,12 +77,27 @@ Parameters:
     - c4.2xlarge
     - c4.4xlarge
     - c4.8xlarge
+    - c5.large
+    - c5.xlarge
+    - c5.2xlarge
+    - c5.4xlarge
     - r3.large
     - r3.xlarge
     - r3.2xlarge
     - r3.4xlarge
     - r3.8xlarge
+    - r4.large
+    - r4.xlarge
+    - r4.2xlarge
+    - r4.4xlarge
+    - r4.8xlarge
     ConstraintDescription: Must be a valid EC2 instance type
+  DatabaseEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues :
+       - "true"
+       - "false"
   DatabaseInstanceType:
     Type: String
     Default: m3.medium
@@ -57,10 +106,28 @@ Parameters:
     - t2.micro
     - t2.small
     - t2.medium
+    - t2.large
+    - t3.micro
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
     - m3.medium
     - m3.large
     - m3.xlarge
     - m3.2xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
     - c3.large
     - c3.xlarge
     - c3.2xlarge
@@ -71,33 +138,47 @@ Parameters:
     - c4.2xlarge
     - c4.4xlarge
     - c4.8xlarge
+    - c5.large
+    - c5.xlarge
+    - c5.2xlarge
+    - c5.4xlarge
     - r3.large
     - r3.xlarge
     - r3.2xlarge
     - r3.4xlarge
     - r3.8xlarge
+    - r4.large
+    - r4.xlarge
+    - r4.2xlarge
+    - r4.4xlarge
+    - r4.8xlarge
     ConstraintDescription: Must be a valid EC2 instance type
+  MongoDBDomain:
+    Type: String
+    Default: db.mydomain.com:27017/pritunl
+    Description: MongoDB connection URI for database if DatabaseEnabled is false
+    ConstraintDescription: Must be a valid MongoDB URI
   DatabaseAuthEnabled:
     Type: String
     Default: "false"
-    Description: mongodb is setup without auth, once manually set, then update ssm location and update the template on this value
+    Description: mongodb is setup without auth, once manually set #then update ssm location and update the template on this value
   DatabaseUsername:
-    Type : 'AWS::SSM::Parameter::Value<String>'
-    Description: if set tell pritunl the database username set ssm location /config/Pritnul/databaseUsername
-    Default: "/config/pritunl/databaseUsername"
+    Type : "String" #'AWS::SSM::Parameter::Value<String>'
+    Description: DatabaseAuthEnabled if set tell pritunl the database username #set ssm location /config/Pritnul/databaseUsername
+    Default: "pritunl" #"/config/pritunl/databaseUsername"
   DatabasePassword:
-    Type : 'AWS::SSM::Parameter::Value<String>'
-    Description: if set tell pritunl the database password set ssm location /config/Pritnul/databasePassword
-    Default: "/config/Pritnul/databasePassword"
+    Type : "String" #'AWS::SSM::Parameter::Value<String>'
+    Description: DatabaseAuthEnabled if set tell pritunl the database password #set ssm location /config/Pritnul/databasePassword
+    Default: "" #"/config/Pritnul/databasePassword"
     NoEcho: true
   DatabaseUseSSL:
-    Type : 'AWS::SSM::Parameter::Value<String>'
-    Description: if set tell pritunl the database requires ssl set ssm location /config/Pritnul/databaseUseSSL
-    Default: "/config/Pritnul/databaseUseSSL"
+    Type : "String" #'AWS::SSM::Parameter::Value<String>'
+    Description: DatabaseAuthEnabled if set tell pritunl the database requires #ssl set ssm location /config/Pritnul/databaseUseSSL
+    Default: "false" #"/config/Pritnul/databaseUseSSL"
   DatabaseAuthSource:
     Type : String
     Default: admin
-    Description: use to pick the auth source of the mongo db table
+    Description: DatabaseAuthEnabled if set tell pritunl which auth source of the mongo db table
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: VPC Id of existsing VPC
@@ -114,10 +195,16 @@ Parameters:
     Type: String
     Description: true or false for enabling public ip for instances (ensure nat gateway is attached if false)
     Default: 'true'
+    AllowedValues :
+       - "true"
+       - "false"
   DatabasePublicIpEnabled:
     Type: String
     Description: true or false for enabling public ip for database (ensure nat gateway is attached if false)
-    Default: 'false'
+    Default: 'true'
+    AllowedValues :
+       - "true"
+       - "false"
   AdminPort:
     Type: Number
     Description: what port is the admin system running on
@@ -144,9 +231,6 @@ Parameters:
   VPNTcpCidrRange:
     Type: String
     Default: "0.0.0.0/0"  #change to internal ip range to disable tcp
-  AsgNotification:
-    Type: String
-    Description: Used to notify lambda to update domain of asg ec2 instance list
 
 Mappings:
   AWSInstanceType2Arch:
@@ -242,10 +326,17 @@ Mappings:
       HVM64: ami-41b2d362
       HVMG2: NOT_SUPPORTED
 Conditions:
-  hasNOAsgNotification:
-    !Equals [ !Ref AsgNotification, '' ]
-  hasAsgNotification:
-    !Not [ !Equals [ !Ref AsgNotification, '' ]]
+  hasKeyName:
+    !Not [ !Equals [ !Ref KeyName , '']]
+  hasDatabaseEnabled:
+    !Equals [ !Ref DatabaseEnabled, 'true' ]
+  hasPritunlDomainAutoUpdate:
+    !Equals [ !Ref PritunlDomainAutoUpdate, 'true' ]
+  NoAsgNotify:
+    !And [ !Equals [ !Ref PritunlDomainAutoUpdate, 'false' ],  !Equals [ !Ref PritunlDomainAsgNotification, '' ]]
+  AsgNotify:
+    !Or [ !Equals [ !Ref PritunlDomainAutoUpdate, 'true' ],  !Not [ !Equals [ !Ref PritunlDomainAsgNotification, '' ]]]
+
 Resources:
   PritunlInstanceRole:
     Type: AWS::IAM::Role
@@ -265,17 +356,6 @@ Resources:
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
-          - Effect: Allow
-            Action:
-            - route53:ListHostedZones
-            - route53:GetChange
-            Resource:
-            - "*"
-          - Effect: Allow
-            Action:
-            - route53:ChangeResourceRecordSets
-            Resource:
-            - !Sub "arn:aws:route53:::hostedzone/${HostedZone}"
           - Effect: Allow
             Action:
             - logs:CreateLogGroup
@@ -305,6 +385,7 @@ Resources:
             - !Sub "arn:aws:ssm:*:*:parameter/config/${Service}/*"
             - !Sub "arn:aws:ssm:*:*:parameter/config/${Service}_*"
             - !Sub "arn:aws:ssm:*:*:parameter/config/${Service}_*/*"
+#uncomment if you want ssm decription functionality
 #          - Effect: Allow
 #            Action:
 #            - kms:Decrypt
@@ -334,6 +415,7 @@ Resources:
       - Ref: PritunlInstanceRole
 
   DatabaseInstance:
+    Condition: hasDatabaseEnabled
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
@@ -422,7 +504,6 @@ Resources:
               mode: '000644'
               owner: root
               group: root
-
         Install:
           packages:
             yum:
@@ -435,7 +516,6 @@ Resources:
               command: service mongod restart
             02_start_onreboot:
               command: chkconfig mongod on
-
     Properties:
       ImageId:
         Fn::FindInMap:
@@ -448,7 +528,10 @@ Resources:
       InstanceType:
         Ref: InstanceType
       KeyName:
-        Ref: KeyName
+        Fn::If:
+          - hasKeyName
+          - Ref: KeyName
+          - Ref: AWS::NoValue
       IamInstanceProfile:
         Ref: Ec2InstanceProfile
       NetworkInterfaces:
@@ -480,32 +563,37 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
-  PritunlScalingGroup:
-    Condition: hasNOAsgNotification
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AvailabilityZones:
-        Fn::GetAZs: ''
-      VPCZoneIdentifier:
-        Ref: VpcSubnets
-      LaunchConfigurationName:
-        Ref: PritunlLaunchConfig
-      MinSize:
-        Ref: StackSize
-      MaxSize:
-        Ref: StackSize
-      DesiredCapacity:
-        Ref: StackSize
-      Tags:
-        -
-          Key: Name
-          Value: !Sub
-            - "${StackName}-instance"
-            - StackName: !Ref AWS::StackName
-          PropagateAtLaunch: true
 
+#  #This is to not notify anyone
+#  PritunlScalingGroup:
+#    Condition: NoAsgNotify
+#    Type: AWS::AutoScaling::AutoScalingGroup
+#    Properties:
+#      AvailabilityZones:
+#        Fn::GetAZs: ''
+#      VPCZoneIdentifier:
+#        Ref: VpcSubnets
+#      LaunchConfigurationName:
+#        Ref: PritunlLaunchConfig
+#      MinSize:
+#        Ref: StackSize
+#      MaxSize:
+#        Ref: StackSize
+#      DesiredCapacity:
+#        Ref: StackSize
+#      Tags:
+#        -
+#          Key: Name
+#          Value: !Sub
+#            - "${StackName}-instance"
+#            - StackName: !Ref AWS::StackName
+#          PropagateAtLaunch: true
+#        -
+#          Key: DomainMeta
+#          Value: !Sub "${PritunlDomainHostedZoneId}:${PritunlDomain}"
+#          PropagateAtLaunch: false
+  #this is to notify internally
   PritunlScalingGroup:
-    Condition: hasAsgNotification
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AvailabilityZones:
@@ -526,15 +614,21 @@ Resources:
           Value: !Sub
             - "${StackName}-instance"
             - StackName: !Ref AWS::StackName
-          Key: DomainMeta
-          Value: !Sub "${HostedZone}:${PritunlDomain}"
           PropagateAtLaunch: true
+        -
+          Key: DomainMeta
+          Value: !Sub "${PritunlDomainHostedZoneId}:${PritunlDomain}"
+          PropagateAtLaunch: false
       NotificationConfigurations:
-        - TopicARN:
-            Ref: AsgNotification
-          NotificationTypes:
-          - autoscaling:EC2_INSTANCE_LAUNCH
-          - autoscaling:EC2_INSTANCE_TERMINATE
+        Fn::If:
+          - NoAsgNotify
+          - !Ref AWS::NoValue
+          - -  TopicARN: !If [ hasPritunlDomainAutoUpdate, !Ref ASGtoRoute53UpdateSNSTopic, !Ref PritunlDomainAsgNotification ]
+               NotificationTypes:
+               - autoscaling:EC2_INSTANCE_LAUNCH
+               - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+               - autoscaling:EC2_INSTANCE_TERMINATE
+               - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
 
   PritunlLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -672,22 +766,37 @@ Resources:
           files:
             "/etc/pritunl.conf":
               content:
-                !Sub |
-                  {
-                      "bind_addr": "0.0.0.0",
-                      "log_path": "/var/log/pritunl.log",
-                      "temp_path": "/tmp/pritunl_%r",
-                      "local_address_interface": "auto",
-                      "mongodb_uri": "mongodb://${DatabaseInstance.PrivateIp}:27017/pritunl",
-                      "port": "${AdminPort}"
-                  }
+                Fn::If:
+                  - hasDatabaseEnabled
+                  - !Sub |
+                    {
+                        "bind_addr": "0.0.0.0",
+                        "log_path": "/var/log/pritunl.log",
+                        "temp_path": "/tmp/pritunl_%r",
+                        "local_address_interface": "auto",
+                        "mongodb_uri": "mongodb://${DatabaseInstance.PrivateIp}:27017/pritunl",
+                        "port": "${AdminPort}"
+                    }
+                  - !Sub |
+                    {
+                        "bind_addr": "0.0.0.0",
+                        "log_path": "/var/log/pritunl.log",
+                        "temp_path": "/tmp/pritunl_%r",
+                        "local_address_interface": "auto",
+                        "mongodb_uri": "mongodb://${MongoDBDomain}",
+                        "port": "${AdminPort}"
+                    }
               mode: '000644'
               owner: root
               group: root
         Configure:
           commands:
             00_auth_pritunl: #if DatabaseAuthEnabled not false, then add auth
-              command: !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": mongodb://${DatabaseUsername}:${DatabasePassword}@${DatabaseInstance.PrivateIp}:27017/pritunl?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
+              command:
+                 Fn::If:
+                   - hasDatabaseEnabled
+                   - !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": mongodb://${DatabaseUsername}:${DatabasePassword}@${DatabaseInstance.PrivateIp}:27017/pritunl?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
+                   - !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": mongodb://${DatabaseUsername}:${DatabasePassword}@${MongoDBDomain}?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
             01_start_pritunl:
               command: start pritunl
               ignoreErrors: true
@@ -708,7 +817,10 @@ Resources:
       - Ref: PritunlSecurityGroup
       AssociatePublicIpAddress: !Ref PublicIpEnabled
       KeyName:
-        Ref: KeyName
+        Fn::If:
+          - hasKeyName
+          - Ref: KeyName
+          - Ref: AWS::NoValue
       IamInstanceProfile:
         Ref: Ec2InstanceProfile
       UserData:
@@ -723,6 +835,7 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
+
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -759,27 +872,78 @@ Resources:
         ToPort: !Ref VPNUdpMaxRange
         CidrIp: !Ref VPNUdpCidrRange
 
-  HostedZone:
-    Type: AWS::Route53::HostedZone
+  ASGtoRoute53UpdateSNSTopic:
+    Condition: hasPritunlDomainAutoUpdate
+    Type: AWS::SNS::Topic
     Properties:
-      Name: !Sub "${PritunlDomain}"
-      HostedZoneConfig:
-        Comment: !Sub "HostedZone resources for the ${AWS::StackName} to control"
-      HostedZoneTags:
-        -
-          Key: "Service"
-          Value: !Ref Service
-#  ElbDNSRecordSet:
-#    Condition: IsNLBEnabled
-#    Type: AWS::Route53::RecordSet
-#    Properties:
-#      HostedZoneId: !Sub ${HostedZone}
-#      AliasTarget:
-#        DNSName: !GetAtt publicNLB.DNSName
-#        HostedZoneId: !GetAtt publicNLB.CanonicalHostedZoneID
-#      Name: !Sub "${PritunlDomain}."
-#      Type: A
+      DisplayName: ASGtoRoute53Update
 
-Outputs:
-  ZoneID:
-    Value: !Ref HostedZone
+  LambdaASGtoRoute53Update:
+    Condition: hasPritunlDomainAutoUpdate
+    Type: 'AWS::Serverless::Function'
+    DependsOn:
+      - LambdaASGtoRoute53UpdateRole
+    Properties:
+      #FunctionName: LambdaASGtoRoute53Update
+      InlineCode: |
+        var AWS=require("aws-sdk"),nextTick=function(e){"function"==typeof setImmediate?setImmediate(e):"undefined"!=typeof process&&process.nextTick?process.nextTick(e):setTimeout(e,0)},makeIterator=function(e){var n=function(o){var t=function(){return e.length&&e[o].apply(null,arguments),t.next()};return t.next=function(){return o<e.length-1?n(o+1):null},t};return n(0)},_isArray=Array.isArray||function(e){return"[object Array]"===Object.prototype.toString.call(e)},waterfall=function(e,n){if(n=n||function(){},!_isArray(e)){var o=new Error("First argument to waterfall must be an array of functions");return n(o)}if(!e.length)return n();var t=function(e){return function(o){if(o)n.apply(null,arguments),n=function(){};else{var r=Array.prototype.slice.call(arguments,1),s=e.next();s?r.push(t(s)):r.push(n),nextTick(function(){e.apply(null,r)})}}};t(makeIterator(e))()};
+        exports.handler=function(e,n){console.log(e);var o=JSON.parse(e.Records[0].Sns.Message),t=o.AutoScalingGroupName,r=(o.EC2InstanceId,o.Event);if(console.log(r),"autoscaling:EC2_INSTANCE_LAUNCH"===r||"autoscaling:EC2_INSTANCE_TERMINATE"===r){console.log("Handling Launch/Terminate Event for "+t);var s=process.env.AWS_DEFAULT_REGION;console.log(s);var a=new AWS.AutoScaling({region:s}),c=new AWS.EC2({region:s}),l=new AWS.Route53;
+        waterfall([function(e){console.log("Describing ASG Tags"),a.describeTags({Filters:[{Name:"auto-scaling-group",Values:[t]},{Name:"key",Values:["DomainMeta"]}],MaxRecords:1},e)},
+        function(e,n){console.log("Processing ASG Tags"),console.log(e.Tags),0==e.Tags.length&&n("ASG: "+t+" does not define Route53 DomainMeta tag.");var o=e.Tags[0].Value.split(":"),r={HostedZoneId:o[0],RecordName:o[1]};console.log(r),n(null,r)},
+        function(e,n){console.log("Retrieving Instances in ASG"),a.describeAutoScalingGroups({AutoScalingGroupNames:[t],MaxRecords:1},function(o,t){n(o,e,t)})},
+        function(e,n,o){console.log(n.AutoScalingGroups[0]);var t=n.AutoScalingGroups[0].Instances.map(function(e){return e.InstanceId});c.describeInstances({DryRun:!1,InstanceIds:t},
+        function(n,t){o(n,e,t)})},function(e,n,o){console.log(n.Reservations);var t=n.Reservations.map(function(e){return{Value:e.Instances[0].NetworkInterfaces[0].Association.PublicIp}});console.log(t),l.changeResourceRecordSets({ChangeBatch:{Changes:[{Action:"UPSERT",ResourceRecordSet:{Name:e.RecordName,Type:"A",TTL:10,ResourceRecords:t}}]},HostedZoneId:e.HostedZoneId},o)}],
+        function(e){e?console.error("Failed to process DNS updates for ASG event: ",e):console.log("Successfully processed DNS updates for ASG event."),n.done(e)})}else console.log("Unsupported ASG event: "+t,r),n.done("Unsupported ASG event: "+t,r)};
+      Description: !Sub 'Asg to Route53 record domain update'
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaASGtoRoute53UpdateRole.Arn
+      Runtime: nodejs8.10
+      Timeout: 20
+      Events:
+        SNS1:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: ASGtoRoute53UpdateSNSTopic
+
+  # Has either AsgToRoute53EditPolicy attached for route53 edit rights
+  LambdaASGtoRoute53UpdateRole:
+    Condition: hasPritunlDomainAutoUpdate
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+
+  AsgToRoute53EditPolicy:
+    Condition: hasPritunlDomainAutoUpdate
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "AsgToRoute53EditPolicy"
+      Roles:
+        -
+          !Ref LambdaASGtoRoute53UpdateRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Action:
+          - route53:ListHostedZones
+          - route53:GetChange
+          Resource:
+          - "*"
+        - Effect: Allow
+          Action:
+          - route53:ChangeResourceRecordSets
+          Resource:
+            - !Sub "arn:aws:route53:::hostedzone/${PritunlDomainHostedZoneId}"
+
