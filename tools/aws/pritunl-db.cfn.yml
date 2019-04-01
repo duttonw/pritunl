@@ -94,6 +94,7 @@ Parameters:
     ConstraintDescription: Must be a valid EC2 instance type
   DatabaseEnabled:
     Type: String
+    Description: If false, database instance is not stood up and MongoDBDomain is used instead
     Default: "true"
     AllowedValues :
        - "true"
@@ -162,6 +163,9 @@ Parameters:
     Type: String
     Default: "false"
     Description: mongodb is setup without auth, once manually set #then update ssm location and update the template on this value
+    AllowedValues :
+       - "true"
+       - "false"
   DatabaseUsername:
     Type : "String" #'AWS::SSM::Parameter::Value<String>'
     Description: DatabaseAuthEnabled if set tell pritunl the database username #set ssm location /config/Pritnul/databaseUsername
@@ -795,8 +799,8 @@ Resources:
               command:
                  Fn::If:
                    - hasDatabaseEnabled
-                   - !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": mongodb://${DatabaseUsername}:${DatabasePassword}@${DatabaseInstance.PrivateIp}:27017/pritunl?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
-                   - !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": mongodb://${DatabaseUsername}:${DatabasePassword}@${MongoDBDomain}?authSource=${DatabaseAuthSource}&ssl=${DatabaseUseSSL}|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
+                   - !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": \"mongodb://${DatabaseUsername}:${DatabasePassword}@${DatabaseInstance.PrivateIp}:27017/pritunl?authSource=${DatabaseAuthSource}\\&ssl=${DatabaseUseSSL}\",|g' /etc/pritunl.conf  ; else echo 'no change auth'; fi"
+                   - !Sub "check=${DatabaseAuthEnabled}; if [ \"$check\" != 'false' ]; then sed -i 's|\"mongodb_uri\":.*$|\"mongodb_uri\": \"mongodb://${DatabaseUsername}:${DatabasePassword}@${MongoDBDomain}?authSource=${DatabaseAuthSource}\\&ssl=${DatabaseUseSSL}\",|g' /etc/pritunl.conf ; else echo 'no change auth'; fi"
             01_start_pritunl:
               command: start pritunl
               ignoreErrors: true
