@@ -12,7 +12,7 @@ Parameters:
      Description: This is the pre-exisitng domain to use, you also give access to edit this domain for the pritunlDomain if PritunlDomainAutoUpdate is true
   PritunlDomain:
     Type: String
-    Description: This is the domain that pritunl can control for letsencrypt dns and also to add new servers to
+    Description: This is the domain that pritunl vpn admin be located at
   PritunlDomainAutoUpdate:
     Type: String
     Default: "true"
@@ -179,6 +179,9 @@ Parameters:
     Type : "String" #'AWS::SSM::Parameter::Value<String>'
     Description: DatabaseAuthEnabled if set tell pritunl the database requires #ssl set ssm location /config/Pritnul/databaseUseSSL
     Default: "false" #"/config/Pritnul/databaseUseSSL"
+    AllowedValues :
+       - "true"
+       - "false"
   DatabaseAuthSource:
     Type : String
     Default: admin
@@ -355,6 +358,7 @@ Resources:
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
       - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      - arn:aws:iam::aws:policy/AmazonVPCReadOnlyAccess
       Policies:
       - PolicyName: Pritunl-CustomPolicy
         PolicyDocument:
@@ -411,6 +415,18 @@ Resources:
             Action:
             - kms:GenerateDataKey
             Resource: '*'
+          - Effect: Allow
+            Action:
+            - route53:ListHostedZones
+            - route53:ListHostedZonesByName
+            - route53:GetChange
+            Resource:
+            - "*"
+          - Effect: Allow
+            Action:
+            - route53:ChangeResourceRecordSets
+            Resource:
+            - !Sub "arn:aws:route53:::hostedzone/${PritunlDomainHostedZoneId}"
   Ec2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -568,35 +584,6 @@ Resources:
       ResourceSignal:
         Timeout: PT5M
 
-#  #This is to not notify anyone
-#  PritunlScalingGroup:
-#    Condition: NoAsgNotify
-#    Type: AWS::AutoScaling::AutoScalingGroup
-#    Properties:
-#      AvailabilityZones:
-#        Fn::GetAZs: ''
-#      VPCZoneIdentifier:
-#        Ref: VpcSubnets
-#      LaunchConfigurationName:
-#        Ref: PritunlLaunchConfig
-#      MinSize:
-#        Ref: StackSize
-#      MaxSize:
-#        Ref: StackSize
-#      DesiredCapacity:
-#        Ref: StackSize
-#      Tags:
-#        -
-#          Key: Name
-#          Value: !Sub
-#            - "${StackName}-instance"
-#            - StackName: !Ref AWS::StackName
-#          PropagateAtLaunch: true
-#        -
-#          Key: DomainMeta
-#          Value: !Sub "${PritunlDomainHostedZoneId}:${PritunlDomain}"
-#          PropagateAtLaunch: false
-  #this is to notify internally
   PritunlScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
