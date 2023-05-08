@@ -1,4 +1,4 @@
-flask==1.1.2
+flask==2.2.5
 cheroot==8.5.2
 jinja2==2.11.3
 pymongo[srv,tls]==3.12.1
