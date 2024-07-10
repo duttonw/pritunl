@@ -20,5 +20,6 @@ influxdb-client==1.21.0
 pyopenssl==19.1.0
 cryptography==3.4.7
 pynacl==1.4.0
-certifi==2021.10.8
+certifi==2024.7.4
 cffi==1.14.6
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
