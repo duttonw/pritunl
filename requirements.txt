@@ -19,6 +19,6 @@ yubico-client==1.13.0
 influxdb-client==1.21.0
 pyopenssl==19.1.0
 cryptography==3.4.7
-pynacl==1.4.0
+pynacl==1.6.2
 certifi==2021.10.8
 cffi==1.14.6
